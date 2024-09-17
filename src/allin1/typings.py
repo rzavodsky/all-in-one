@@ -1,14 +1,14 @@
 import numpy as np
 import torch
 import json
+import os
 
-from os import PathLike
 from pathlib import Path
 from typing import List, Dict, Optional, Union
 from dataclasses import dataclass
 from numpy.typing import NDArray
 
-PathLike = Union[str, PathLike]
+PathLike = Union[str, os.PathLike]
 
 
 @dataclass

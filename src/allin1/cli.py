@@ -64,6 +64,7 @@ def main():
     keep_byproducts=args.keep_byproducts,
     overwrite=args.overwrite,
     multiprocess=not args.no_multiprocess,
+    progress_callback=lambda x: print(f"Progress: {x*100:.2f}")
   )
 
   print(f'=> Analysis results are successfully saved to {args.out_dir}')

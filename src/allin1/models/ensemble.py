@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from typing import List
+from typing import Callable, List
 from .allinone import AllInOne
 from ..typings import AllInOneOutput
 
@@ -17,8 +17,13 @@ class Ensemble(nn.Module):
     self.cfg = cfg
     self.models = models
 
-  def forward(self, x):
-    outputs: List[AllInOneOutput] = [model(x) for model in self.models]
+  def forward(self, x, *, progress_callback: Callable[[float], None] | None = None):
+    outputs: List[AllInOneOutput] = []
+    for i, model in enumerate(self.models):
+      outputs.append(model(
+        x,
+        progress_callback=(lambda x: progress_callback((i+x) / len(self.models))) if progress_callback else None,
+      ))
     avg = AllInOneOutput(
       logits_beat=torch.stack([output.logits_beat for output in outputs], dim=0).mean(dim=0),
       logits_downbeat=torch.stack([output.logits_downbeat for output in outputs], dim=0).mean(dim=0),

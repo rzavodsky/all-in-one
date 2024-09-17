@@ -5,7 +5,7 @@ import torch
 from dataclasses import asdict
 from pathlib import Path
 from glob import glob
-from typing import List, Union
+from typing import Callable, List, Union
 from .utils import mkpath, compact_json_number_array
 from .typings import AllInOneOutput, AnalysisResult, PathLike
 from .postprocessing import (
@@ -22,11 +22,18 @@ def run_inference(
   device: str,
   include_activations: bool,
   include_embeddings: bool,
+  progress_callback: Callable[[float], None] | None = None,
 ) -> AnalysisResult:
   spec = np.load(spec_path)
   spec = torch.from_numpy(spec).unsqueeze(0).to(device)
 
-  logits = model(spec)
+  logits = model(
+    spec,
+    progress_callback=(lambda x: progress_callback(x*0.99)) if progress_callback else None
+  )
+
+  if progress_callback:
+    progress_callback(0.99)
 
   metrical_structure = postprocess_metrical_structure(logits, model.cfg)
   functional_structure = postprocess_functional_structure(logits, model.cfg)
@@ -45,6 +52,9 @@ def run_inference(
 
   if include_embeddings:
     result.embeddings = logits.embeddings[0].cpu().numpy()
+
+  if progress_callback:
+    progress_callback(1)
 
   return result
 

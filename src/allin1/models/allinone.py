@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from typing import Optional
+from typing import Callable, Optional
 from .dinat import DinatLayer1d, DinatLayer2d
 from .utils import get_activation_function
 from ..config import Config
@@ -36,6 +36,8 @@ class AllInOne(nn.Module):
     self,
     inputs: torch.FloatTensor,
     output_attentions: Optional[bool] = None,
+    *,
+    progress_callback: Callable[[float], None] | None = None,
   ):
     # N: batch size
     # K: instrument
@@ -51,6 +53,7 @@ class AllInOne(nn.Module):
     encoder_outputs = self.encoder(
       frame_embed,
       output_attentions=output_attentions,
+      progress_callback=progress_callback,
     )
     hidden_state_levels = encoder_outputs[0]
 
@@ -97,6 +100,8 @@ class AllInOneEncoder(nn.Module):
     self,
     frame_embed: torch.FloatTensor,
     output_attentions: Optional[bool] = None,
+    *,
+    progress_callback: Callable[[float], None] | None = None
   ):
     # N: batch size
     # K: instrument
@@ -107,6 +112,8 @@ class AllInOneEncoder(nn.Module):
     hidden_state_levels = []
     hidden_states = frame_embed
     for i, layer in enumerate(self.layers):
+      if progress_callback:
+        progress_callback(i / len(self.layers))
       layer_outputs = layer(hidden_states, output_attentions)
       hidden_states = layer_outputs[0]
       hidden_state_levels.append(hidden_states)
@@ -114,6 +121,8 @@ class AllInOneEncoder(nn.Module):
     outputs = (hidden_state_levels,)
     if output_attentions:
       outputs += layer_outputs[1:]
+    if progress_callback:
+      progress_callback(1)
     return outputs
 
 

@@ -1,6 +1,6 @@
 import torch
 
-from typing import List, Union
+from typing import Callable, List, Union
 from tqdm import tqdm
 from .demix import demix
 from .spectrogram import extract_spectrograms
@@ -32,6 +32,7 @@ def analyze(
   keep_byproducts: bool = False,
   overwrite: bool = False,
   multiprocess: bool = True,
+  progress_callback: Callable[[float], None] | None = None
 ) -> Union[AnalysisResult, List[AnalysisResult]]:
   """
   Analyzes the provided audio files and returns the analysis results.
@@ -115,65 +116,84 @@ def analyze(
   # Analyze the tracks that are not analyzed yet.
   if todo_paths:
     # Run HTDemucs for source separation only for the tracks that are not analyzed yet.
-    demix_paths = demix(todo_paths, demix_dir, device)
+    demix_paths = demix(
+      todo_paths,
+      demix_dir,
+      device,
+      progress_callback=(lambda x: progress_callback(0.5 * x)) if progress_callback else None)
+
+    if progress_callback:
+      progress_callback(0.5)
 
     # Extract spectrograms for the tracks that are not analyzed yet.
     spec_paths = extract_spectrograms(demix_paths, spec_dir, multiprocess)
 
-    # Load the model.
-    model = load_pretrained_model(
-      model_name=model,
-      device=device,
-    )
+    try:
+      if progress_callback:
+        progress_callback(0.5)
+      # Load the model.
+      model = load_pretrained_model(
+        model_name=model,
+        device=device,
+      )
+      if progress_callback:
+        progress_callback(0.5)
 
-    with torch.no_grad():
-      pbar = tqdm(zip(todo_paths, spec_paths), total=len(todo_paths))
-      for path, spec_path in pbar:
-        pbar.set_description(f'Analyzing {path.name}')
 
-        result = run_inference(
-          path=path,
-          spec_path=spec_path,
-          model=model,
-          device=device,
-          include_activations=include_activations,
-          include_embeddings=include_embeddings,
-        )
+      files_analyzed = 0
 
-        # Save the result right after the inference.
-        # Checkpointing is always important for this kind of long-running tasks...
-        # for my mental health...
-        if out_dir is not None:
-          save_results(result, out_dir)
+      with torch.no_grad():
+        pbar = tqdm(zip(todo_paths, spec_paths), total=len(todo_paths))
+        for path, spec_path in pbar:
+          pbar.set_description(f'Analyzing {path.name}')
 
-        results.append(result)
+          result = run_inference(
+            path=path,
+            spec_path=spec_path,
+            model=model,
+            device=device,
+            include_activations=include_activations,
+            include_embeddings=include_embeddings,
+            progress_callback=(lambda x: progress_callback(0.5 + (files_analyzed + x) / len(todo_paths) / 2)) if progress_callback else None,
+          )
 
-  # Sort the results by the original order of the tracks.
-  results = sorted(results, key=lambda result: paths.index(result.path))
+          # Save the result right after the inference.
+          # Checkpointing is always important for this kind of long-running tasks...
+          # for my mental health...
+          if out_dir is not None:
+            save_results(result, out_dir)
 
-  if visualize:
-    if visualize is True:
-      visualize = './viz'
-    _visualize(results, out_dir=visualize, multiprocess=multiprocess)
-    print(f'=> Plots are successfully saved to {visualize}')
+          results.append(result)
+          files_analyzed += 1
+    finally:
+      if not keep_byproducts:
+        for path in demix_paths:
+          for stem in ['bass', 'drums', 'other', 'vocals']:
+            (path / f'{stem}.wav').unlink(missing_ok=True)
+          rmdir_if_empty(path)
+        rmdir_if_empty(demix_dir / 'htdemucs')
+        rmdir_if_empty(demix_dir)
 
-  if sonify:
-    if sonify is True:
-      sonify = './sonif'
-    _sonify(results, out_dir=sonify, multiprocess=multiprocess)
-    print(f'=> Sonified tracks are successfully saved to {sonify}')
+        for path in spec_paths:
+          path.unlink(missing_ok=True)
+        rmdir_if_empty(spec_dir)
 
-  if not keep_byproducts:
-    for path in demix_paths:
-      for stem in ['bass', 'drums', 'other', 'vocals']:
-        (path / f'{stem}.wav').unlink(missing_ok=True)
-      rmdir_if_empty(path)
-    rmdir_if_empty(demix_dir / 'htdemucs')
-    rmdir_if_empty(demix_dir)
+    if progress_callback:
+      progress_callback(1)
+    # Sort the results by the original order of the tracks.
+    results = sorted(results, key=lambda result: paths.index(result.path))
 
-    for path in spec_paths:
-      path.unlink(missing_ok=True)
-    rmdir_if_empty(spec_dir)
+    if visualize:
+      if visualize is True:
+        visualize = './viz'
+      _visualize(results, out_dir=visualize, multiprocess=multiprocess)
+      print(f'=> Plots are successfully saved to {visualize}')
+
+    if sonify:
+      if sonify is True:
+        sonify = './sonif'
+      _sonify(results, out_dir=sonify, multiprocess=multiprocess)
+      print(f'=> Sonified tracks are successfully saved to {sonify}')
 
   if not return_list:
     return results[0]
