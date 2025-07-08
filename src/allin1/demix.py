@@ -62,7 +62,7 @@ def demix(
       match = TQDM_PROGRESS_RE.match(line)
       if match:
         new_progress = float(match.group(1)) / 100
-        if new_progress < 0.001 and progress > 0:
+        if new_progress < 0.001 and progress > 0.2:
           processed_count += 1
         progress = new_progress
       try:
