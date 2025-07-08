@@ -7,9 +7,21 @@ import math
 import torch
 from abc import ABC,  abstractmethod
 from typing import Optional, Tuple, Callable
-from natten.functional import natten1dav, natten1dqkrpb, natten2dav, natten2dqkrpb
+from natten.functional import na1d_av, na1d_qk, na2d_av, na2d_qk
 from ..config import Config
 from .utils import *
+
+def natten1dqkrpb(query, key, rpb, kernel_size, dilation):
+    return na1d_qk(query, key, kernel_size=(kernel_size,), dilation=(dilation,), rpb=rpb)
+
+def natten2dqkrpb(query, key, rpb, kernel_size, dilation):
+    return na2d_qk(query, key, kernel_size=(kernel_size, kernel_size), dilation=(dilation, dilation), rpb=rpb)
+
+def natten1dav(attn, value, kernel_size, dilation):
+    return na1d_av(attn, value, kernel_size=(kernel_size,), dilation=(dilation,))
+
+def natten2dav(attn, value, kernel_size, dilation):
+    return na2d_av(attn, value, kernel_size=(kernel_size, kernel_size), dilation=(dilation, dilation))
 
 
 # Copied from transformers.models.beit.modeling_beit.drop_path
