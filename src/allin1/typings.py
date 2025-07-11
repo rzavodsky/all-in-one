@@ -29,7 +29,7 @@ class Segment:
 
 @dataclass
 class AnalysisResult:
-  path: Path
+  path: Path | None
   bpm: int
   beats: List[float]
   downbeats: List[float]
